@@ -32,12 +32,45 @@ data MoleAction = Whack | GoUp | GoDown
 
 -- What happens to the mole in response to an action command
 -- And, does this result in a successful whack for the player?
-updateMole :: MoleAction -> (MoleState) -> (MoleState)
-updateMole GoUp   MoleDown    = (MoleUp)
-updateMole GoDown MoleUp      = (MoleDown)
-updateMole Whack  MoleUp      = (MoleWhacked)
-updateMole Whack  MoleWhacked = (MoleWhacked)
-updateMole GoDown MoleWhacked = (MoleDown)
+updateMole :: MoleAction -> (MoleState,MoleState) -> (MoleState,MoleState)
+updateMole moleAction (lastState,thisState) = (thisState, newState)
+  where newState = case (moleAction,thisState) of
+          (GoUp,   MoleDown)    -> MoleUp
+          (GoDown, MoleUp)      -> MoleDown
+          (Whack,  MoleUp)      -> MoleWhacked
+          (Whack,  MoleWhacked) -> MoleWhacked
+          (GoDown, MoleWhacked) -> MoleDown
+          (_,      s     )      -> s
+
+------------------------------------------------------------------------------
+moleWidget :: (RandomGen r, MonadWidget t m)
+           => r
+           -> UTCTime
+           -> Dynamic t Double
+           -> m (Event t (MoleState, MoleState))
+moleWidget rnd t0 popupRate = mdo
+
+  picAttrs <- forDyn moleState $ \s ->
+    ("draggable" =: "false") <>
+    ("src" =: (show (snd s) <> ".png"))
+
+  molePic <- fmap fst $ elDynAttr' "img" picAttrs $ return ()
+
+  let (r,r') = split rnd
+
+  popupTimes  <- inhomogeneousPoisson r (current popupRate) 5 t0
+  goDownTimes <- mapDyn (*2) popupRate >>= \goDownRate ->
+    inhomogeneousPoisson r' (current goDownRate) 10 t0
+  let whacks  =  _el_clicked molePic
+
+  moleState  <- foldDyn updateMole (MoleDown, MoleDown)
+                (leftmost [fmap (const GoUp)   popupTimes
+                          ,fmap (const GoDown) goDownTimes
+                          ,fmap (const Whack)  whacks
+                          ])
+
+  return . ffilter (== (MoleUp,MoleWhacked)) . updated $ moleState
+
 
 ------------------------------------------------------------------------------
 whackAMoleWidget :: (RandomGen r, MonadWidget t m) => r -> UTCTime -> m ()
@@ -53,41 +86,12 @@ whackAMoleWidget rnd t0 = mdo
 
   moleEvents <- elAttr "div" moleDivAttrs $ mdo
     leftmost <$> forM moleRndGens
-      (\(k,v) -> moleWidget v t0 (constDyn 0.2))
+      (\(k,v) -> moleWidget v t0 (constDyn 0.4))
 
   score <- foldDyn (\_ acc -> acc + (100 :: Int)) 0 moleEvents
 
   return ()
 
-
-------------------------------------------------------------------------------
-moleWidget :: (RandomGen r, MonadWidget t m)
-           => r
-           -> UTCTime
-           -> Dynamic t Double
-           -> m (Event t MoleState)
-moleWidget rnd t0 popupRate = mdo
-
-  picAttrs <- forDyn moleState $ \s ->
-    ("draggable" =: "false") <>
-    ("src" =: (show s <> ".png"))
-
-  molePic <- fmap fst $ elDynAttr' "img" picAttrs $ return ()
-
-  let (r,r') = split rnd
-
-  popupTimes  <- inhomogeneousPoisson r (current popupRate) 5 t0
-  goDownTimes <- mapDyn (*2) popupRate >>= \goDownRate ->
-    inhomogeneousPoisson r' (current goDownRate) 10 t0
-  let whacks  =  _el_clicked molePic
-
-  moleState  <- foldDyn updateMole MoleDown
-                (leftmost [fmap (const GoUp)   popupTimes
-                          ,fmap (const GoDown) popupTimes
-                          ,fmap (const Whack)  whacks
-                          ])
-
-  return . ffilter (== (MoleWhacked)) . updated $ moleState
 
 ------------------------------------------------------------------------------
 nRnd :: RandomGen g => Int -> g -> [g]
