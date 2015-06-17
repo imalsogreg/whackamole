@@ -6,7 +6,11 @@
 module Main where
 
 import Control.Concurrent (threadDelay)
-import Control.Monad.IO.Class (liftM)
+import Control.Monad (liftM)
+import Control.Monad.IO.Class (liftIO)
+import Data.Foldable
+import Data.Traversable
+import Data.Monoid
 import Data.Time
 import Data.Time.Clock
 import Safe
@@ -21,19 +25,19 @@ import Reflex.Dom
 
 
 data MoleState = MoleDown | MoleUp | MoleWhacked
-               deriving (Eq)
+               deriving (Eq, Show)
 
 data MoleAction = Whack | GoUp | GoDown
                 deriving (Eq)
 
 -- What happens to the mole in response to an action command
 -- And, does this result in a successful whack for the player?
-updateMole :: MoleAction -> (MoleState) -> (MoleState,Bool)
-updateMole GoUp   MoleDown    = (MoleUp, False)
-updateMole GoDown MoleUp      = (MoleDown, False)
-updateMole Whack  MoleUp      = (MoleWhacked, True)
-updateMole Whack  MoleWhacked = (MoleWhacked, False)
-updateMole GoDown MoleWhacked = (MoleDown, False)
+updateMole :: MoleAction -> (MoleState) -> (MoleState)
+updateMole GoUp   MoleDown    = (MoleUp)
+updateMole GoDown MoleUp      = (MoleDown)
+updateMole Whack  MoleUp      = (MoleWhacked)
+updateMole Whack  MoleWhacked = (MoleWhacked)
+updateMole GoDown MoleWhacked = (MoleDown)
 
 ------------------------------------------------------------------------------
 whackAMoleWidget :: (RandomGen r, MonadWidget t m) => r -> UTCTime -> m ()
@@ -47,7 +51,7 @@ whackAMoleWidget rnd t0 = mdo
 
   el "br" $ return ()                               -- HTML Line break
 
-  moleEvents <- elAttr "div" moleDivAttrs $ do
+  moleEvents <- elAttr "div" moleDivAttrs $ mdo
     leftmost <$> forM moleRndGens
       (\(k,v) -> moleWidget v t0 (constDyn 0.2))
 
@@ -57,16 +61,16 @@ whackAMoleWidget rnd t0 = mdo
 
 
 ------------------------------------------------------------------------------
-moleWidget :: (RandomGen r, MoleWidget t m)
+moleWidget :: (RandomGen r, MonadWidget t m)
            => r
            -> UTCTime
            -> Dynamic t Double
-           -> m ()
-moleWidget rnd t0 popupRate = do
+           -> m (Event t MoleState)
+moleWidget rnd t0 popupRate = mdo
 
   picAttrs <- forDyn moleState $ \s ->
     ("draggable" =: "false") <>
-    ("src" =: "static/" <> show s <> ".png")
+    ("src" =: (show s <> ".png"))
 
   molePic <- fmap fst $ elDynAttr' "img" picAttrs $ return ()
 
@@ -75,24 +79,25 @@ moleWidget rnd t0 popupRate = do
   popupTimes  <- inhomogeneousPoisson r (current popupRate) 5 t0
   goDownTimes <- mapDyn (*2) popupRate >>= \goDownRate ->
     inhomogeneousPoisson r' (current goDownRate) 10 t0
+  let whacks  =  _el_clicked molePic
 
   moleState  <- foldDyn updateMole MoleDown
-                (leftMost [fmap (const GoUp)   popupTimes
+                (leftmost [fmap (const GoUp)   popupTimes
                           ,fmap (const GoDown) popupTimes
                           ,fmap (const Whack)  whacks
                           ])
 
-  return . ffilter (== (MoleWhacked,True)) . updated $ moleState
+  return . ffilter (== (MoleWhacked)) . updated $ moleState
 
 ------------------------------------------------------------------------------
 nRnd :: RandomGen g => Int -> g -> [g]
-nRand 0 g = []
-nRand 1 g = [g]
-nRand n g = let (g',g'') = split g in g' : nRnd (n-1) g''
+nRnd 0 g = []
+nRnd 1 g = [g]
+nRnd n g = let (g',g'') = split g in g' : nRnd (n-1) g''
 
 waitUntilJust :: IO (Maybe a) -> IO a
 waitUntilJust a = do
-  mx =<< a
+  mx <- a
   case mx of
     Just x -> return x
     Nothing -> do
@@ -102,14 +107,15 @@ waitUntilJust a = do
 main :: IO ()
 main = do
   rnd    <- getStdGen
-  runWebGui $ \webView -> do
+  tStart <- getCurrentTime
+  runWebGUI $ \webView -> do
     doc <- waitUntilJust $ liftM (fmap castToHTMLDocument) $
            webViewGetDomDocument webView
     let btag = "reflex-area" :: String
     root <- waitUntilJust $ liftM (fmap castToHTMLElement) $
             documentGetElementById doc btag
-    attachWidget root webView (runApp tStart)
+    attachWidget root webView (runApp rnd tStart)
 
-runApp :: forall t m g.(MonadWidget t m, RandomGen g) => g -> m ()
-runApp = do
+runApp :: forall t m g.(MonadWidget t m, RandomGen g) => g -> UTCTime -> m ()
+runApp g t0 = do
   liftIO getCurrentTime >>= \t0 -> whackAMoleWidget g t0
