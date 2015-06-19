@@ -1,15 +1,15 @@
 from flask import Flask, request
 from flask import json
-import MySQLdb
+import psycopg2
 import ConfigParser, os
 
 config = ConfigParser.ConfigParser()
 config.readfp(open('db.cfg'))
 
-db = MySQLdb.connect(host   = config.get('Db','host'),
-                     user   = config.get('Db','user'),
-                     passwd = config.get('Db','passwd'),
-                     db     = config.get('Db','db'))
+db = psycopg2.connect(host   = config.get('Db','host'),
+                      user   = config.get('Db','user'),
+                      passwd = config.get('Db','passwd'),
+                      db     = config.get('Db','db'))
 cur = db.cursor()
 
 app = Flask(__name__)
@@ -31,6 +31,7 @@ def report():
         try:
             cur.execute("INSERT INTO scores(username,score,difficulty) VALUES (%s,%s,%s);",
                         (payload["username"],payload["score"],payload["difficulty"]))
+            db.commit()
             return "Ok!\n"
         except:
             return "SQL error"
