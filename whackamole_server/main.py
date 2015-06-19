@@ -1,4 +1,4 @@
-from flask import Flask, request, url_for
+from flask import Flask, request, render_template
 from flask import json
 import psycopg2
 import ConfigParser, os
@@ -22,7 +22,7 @@ def index():
 
 @app.route('/game/<int:difficulty>')
 def game(difficulty):
-    return 'Game difficulty %d' % difficulty
+    return render_template('game.html', difficulty=difficulty)
 
 @app.route('/report', methods=['POST','GET'])
 def report():
@@ -45,7 +45,6 @@ def report():
             a = a + "\n"
         return a
 
-url_for('static', filename='default.css')
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0')
