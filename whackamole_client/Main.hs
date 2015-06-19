@@ -51,10 +51,11 @@ moleWidget :: (RandomGen r, MonadWidget t m)
 moleWidget rnd t0 popupRate = mdo
 
   picAttrs <- forDyn moleState $ \s ->
-    ("draggable" =: "false") <>
-    ("src" =: (show (snd s) <> ".png"))
+    ("style" =: ("background-image:url('/static/img/"
+                 <> show (snd s) <> ".png\');"))
+    <> "class" =: "molePic"
 
-  molePic <- fmap fst $ elDynAttr' "img" picAttrs $ return ()
+  molePic <- fmap fst $ elDynAttr' "div" picAttrs $ return ()
 
   let (r,r') = split rnd
 
