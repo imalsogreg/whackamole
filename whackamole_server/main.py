@@ -1,4 +1,4 @@
-from flask import Flask, request
+from flask import Flask, request, url_for
 from flask import json
 import psycopg2
 import ConfigParser, os
@@ -6,10 +6,10 @@ import ConfigParser, os
 config = ConfigParser.ConfigParser()
 config.readfp(open('db.cfg'))
 
-db = psycopg2.connect(host   = config.get('Db','host'),
-                      user   = config.get('Db','user'),
-                      passwd = config.get('Db','passwd'),
-                      db     = config.get('Db','db'))
+db = psycopg2.connect(host     = config.get('Db','host'),
+                      user     = config.get('Db','user'),
+                      password = config.get('Db','password'),
+                      dbname   = config.get('Db','dbname'))
 cur = db.cursor()
 
 app = Flask(__name__)
@@ -45,7 +45,7 @@ def report():
             a = a + "\n"
         return a
 
+url_for('static', filename='default.css')
 
 if __name__ == "__main__":
-    app.debug = True
-    app.run()
+    app.run(host='0.0.0.0')
