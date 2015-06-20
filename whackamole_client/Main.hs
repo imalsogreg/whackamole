@@ -156,15 +156,18 @@ main = do
         dtag = "difficulty"  :: String
     root <- waitUntilJust $ liftM (fmap castToHTMLElement) $
             documentGetElementById doc btag
-    --dDiv <- waitUntilJust $ liftM $ documentGetElementById dtag
---    dTxt <- liftM $ htmlElementGetInnerText dDiv
---    let widg =
---          maybe
---          (text $ "Error reading difficulty div: " <> show dTxt)
---          (runApp rnd tStart)
---          (readMay dTxt)
---    attachWidget root webView widg
-    attachWidget root webView (runApp rnd tStart 2)
+    dDiv <- waitUntilJust $ liftM (fmap castToHTMLElement)$
+            documentGetElementById doc dtag
+    dTxt <- liftIO $ htmlElementGetInnerText dDiv
+    --let dTxt = "1"
+    --let a = htmlElementGetInnerText :: Int
+    let widg =
+          maybe
+          (text $ "Error reading difficulty div: " <> show dTxt)
+          (runApp rnd tStart)
+          (readMay dTxt)
+    attachWidget root webView widg
+--    attachWidget root webView (runApp rnd tStart 2)
 
 runApp :: forall t m g.(MonadWidget t m, RandomGen g) => g -> UTCTime -> Int -> m ()
 runApp g t0 difficulty = do
