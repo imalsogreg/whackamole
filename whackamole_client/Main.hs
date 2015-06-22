@@ -104,10 +104,6 @@ whackAMoleWidget
   -> m (Dynamic t Int)
 whackAMoleWidget rnd t0 difficulty = mdo
 
-  let dt = 1 :: Double
-  timerTics <- tickLossy (realToFrac dt) t0
-  timeLeft <- foldDyn (\_ acc -> acc - dt) (fromIntegral trialLength) timerTics
-
   let rands        = nRnd 9 rnd
       moleRndGens  = zip [(0::Int)..] rands
       moleDivAttrs = "style" =: "background-color: #d7e0d1;max-width:500px"
@@ -124,7 +120,13 @@ whackAMoleWidget rnd t0 difficulty = mdo
   score <- foldDyn (\_ acc -> acc + (100 :: Int)) 0 moleEvents
 
   el "br" (return ())
-  dTimeLeft <- forDyn timeLeft (\t -> "style" =: ("clear:both;background-color:white;height:2px;width:" <> show (10*t) <> "px;"))
+
+  let dt = 1 :: Double
+  timerTics <- tickLossy (realToFrac dt) t0
+  timeLeft <- foldDyn (\_ acc -> acc - dt) (fromIntegral trialLength) timerTics
+  dTimeLeft <- forDyn timeLeft
+               (\t -> "style" =: ("width:" <> show (5*t) <> "px;") <>
+               "id" =: "timeLeft")
   elDynAttr "div" dTimeLeft (return ())
 
   return score
