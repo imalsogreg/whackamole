@@ -1,10 +1,12 @@
-from flask import Flask, request, render_template
+from flask import Flask, request, render_template, make_response, jsonify
 from flask import json
 import psycopg2
 import ConfigParser, os
 
+package_dir = os.path.dirname(os.path.abspath(__file__))
+
 config = ConfigParser.ConfigParser()
-config.readfp(open('db.cfg'))
+config.readfp(open(package_dir + '/db.cfg'))
 
 db = psycopg2.connect(host     = config.get('Db','host'),
                       user     = config.get('Db','user'),
@@ -13,8 +15,6 @@ db = psycopg2.connect(host     = config.get('Db','host'),
 cur = db.cursor()
 
 app = Flask(__name__)
-with open('db.cfg') as f:
-    config = f.read()
 
 @app.route('/')
 def index():
@@ -24,26 +24,36 @@ def index():
 def game(difficulty):
     return render_template('game.html', difficulty=difficulty)
 
-@app.route('/report', methods=['POST','GET'])
+@app.route('/report/<int:difficulty>', methods=['POST'])
 def report():
-    if request.method == 'POST':
-        payload = request.get_json()
-        try:
-            cur.execute("INSERT INTO scores(username,score,difficulty) VALUES (%s,%s,%s);",
-                        (payload["username"],payload["score"],payload["difficulty"]))
-            db.commit()
-            return "Ok!\n"
-        except:
-            return "SQL error"
-    if request.method == 'GET':
-        cur.execute("SELECT * FROM scores;")
-        rows = cur.fetchall()
-        a = ""
-        for row in rows:
-            for col in row:
-                a = a + str(col) + " "
-            a = a + "\n"
-        return a
+    payload = request.get_json()
+    try:
+        cur.execute("INSERT INTO scores(username,score,difficulty) VALUES (%s,%s,%s);",
+                    (payload["username"],payload["score"],payload["difficulty"]))
+        db.commit()
+        return "Ok!\n"
+    except:
+        return "SQL error"
+
+@app.route('/scores/<int:difficulty>')
+def scores(difficulty):
+    cur.execute("""SELECT * FROM scores
+                WHERE difficulty = (%s)
+                ORDER BY score DESC
+                LIMIT 10;""",
+	str(difficulty))
+    rows = cur.fetchall()
+    scoresJson = []
+    for row in rows:
+        thisScore = {}
+        thisScore["username"]   = row[0]
+        thisScore["score"]      = row[1]
+        thisScore["difficulty"] = row[2]
+        thisScore["time"]       = row[3]
+        scoresJson.append(thisScore)
+    resp = make_response(json.dumps(scoresJson))
+    resp.headers["Content-Type"] = "application/json"
+    return resp
 
 
 if __name__ == "__main__":
